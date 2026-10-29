@@ -49,7 +49,8 @@ Primärkällor:
    Nästlade sökvägar och relationella frågespråk skjuts upp.
 6. Alla musikaliska tidsvärden serialiseras som {numerator, denominator}.
    Fraction bevaras exakt; float konverteras med as_integer_ratio utan
-   avrundning. Objektvärden blir {$ref: ...}, aldrig rekursiv expansion.
+   avrundning. Objektvärden blir {$ref: ...}; explicit begränsad expansion kan begäras
+   med object_query.select (se tillägget nedan).
    Samlingar i egenskaper begränsas till 100 poster med total/truncated.
 7. Barn och sökresultat har offset/limit-paginering (max 100). Traversal
    begränsas till 100 000 förekomster och djup 128 och avbryts med ett
@@ -71,3 +72,23 @@ metodanrop får inte automatiskt bli nya dokument utan ett separat beslut.
 Transaktioner kan behöva kopior och en strategi för ogiltiga referenser;
 rollback och redigering implementeras inte nu. MusicXML-bevarande behöver
 senare testas mot verkliga MuseScore-partitur och export.
+
+
+## Tillägg: selektiv projektion i object_query
+
+Klienten kan välja generella punktseparerade egenskapsvägar i samma läsyta
+som object_get. Ett separat projection-lager bygger ett urvalsträd, validerar
+namn före traversal och bevarar registrets handtag även vid expansion.
+Ingen automatisk introspektion eller ny musikalisk specialfunktion införs.
+Befintlig frågesemantik, filter och standardrespons är oförändrade.
+
+Sidor begränsas både i antal och kompakt JSON-storlek; urvalsdjup,
+samlingsstorlek och antal expansionsvärden begränsas separat. Bytebudgeten
+reserverar 128 byte för svarskuvertet och räknar varje kandidatträffs UTF-8-JSON.
+Nästa sida börjar vid första träffen som inte rymdes. Ingen för stor träff
+försvinner tyst. Se protocol.md för fullständiga fel- och offsetregler.
+
+Alternativet att alltid expandera allt avvisades: det skulle försvåra både
+storlekskontroll och cykelhantering. Urvalet behåller i stället samma
+objektidentitet som individuella object_get-anrop. Integrationstester följer
+referenser oberoende via object_get och jämför både skalärer och samlingar.

@@ -82,6 +82,8 @@ def create_server() -> FastMCP:
         filters: dict[str, Any] | None = None,
         offset: int = 0,
         limit: int = 50,
+        select: list[str] | None = None,
+        max_bytes: int = 262_144,
     ) -> dict[str, Any]:
         """Search descendants of object_id (default document root), excluding the root.
 
@@ -91,10 +93,18 @@ def create_server() -> FastMCP:
         Filters are AND equality on nameWithOctave, quarterLength, number, partName,
         text, step, octave, type, ratioString, sharps, content. Missing fields do not
         match. quarterLength accepts a number or {numerator, denominator}.
+        select optionally projects approved properties, e.g. ["quarterLength",
+        "pitch.nameWithOctave", "lyrics.text", "pitches.midi"]. Dot paths expand
+        references/collections while retaining $ref IDs. Missing properties are omitted.
+        At most 32 paths, 4 property levels, 100 collection items and 4096 values
+        per match. max_bytes (1024..262144) bounds compact UTF-8 JSON result size;
+        pages may be shorter than limit. Continue using next_offset.
         Results are containment occurrences with stable IDs; shared objects may
         appear multiple times. limit is 1..100; next_offset continues pagination.
         """
-        return objects.query(document_id, object_id, type_name, filters, offset, limit)
+        return objects.query(
+            document_id, object_id, type_name, filters, offset, limit, select, max_bytes
+        )
 
     return mcp
 

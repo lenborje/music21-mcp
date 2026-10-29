@@ -175,3 +175,78 @@ def test_unexpected_errors_are_sanitized():
 
     with pytest.raises(APIError, match="^internal_error: Unable to complete read operation$"):
         broken()
+
+
+def test_projected_shared_contexts(opened):
+    sessions, api, _ = opened
+    root = stream.Score()
+    a, b = stream.Part(), stream.Part()
+    shared = note.Note("F#4", quarterLength=Fraction(1, 3))
+    a.insert(Fraction(1, 3), shared)
+    b.insert(2, shared)
+    root.insert(0, a)
+    root.insert(8, b)
+    doc = Document(root, "shared")
+    sessions._documents[doc.id] = doc
+    active = shared.activeSite
+    result = api.query(doc.id, type_name="Note", select=["pitch.midi", "quarterLength"])
+    first, second = result["items"]
+    assert first["id"] == second["id"]
+    assert first["properties"] == second["properties"]
+    assert first["offset"] == rational(Fraction(1, 3))
+    assert second["offset"] == rational(2)
+    assert first["parent"] != second["parent"]
+    assert api.get(doc.id, first["id"])["properties"]["pitch"] == {
+        "$ref": first["properties"]["pitch"]["$ref"]
+    }
+    assert shared.activeSite is active
+
+
+def test_projection_limits_and_empty_selection(opened):
+    sessions, api, opened_doc = opened
+    did = opened_doc["document_id"]
+    plain = api.query(did)
+    empty = api.query(did, select=[])
+    assert [
+        {k: v for k, v in item.items() if k != "properties"} for item in empty["items"]
+    ] == plain["items"]
+    assert all(item["properties"] == {} for item in empty["items"])
+    for max_bytes in (1023, 262145, True):
+        with pytest.raises(APIError, match="invalid_pagination"):
+            api.query(did, max_bytes=max_bytes)
+    doc = sessions.get(did)
+    for _ in range(4):
+        n = note.Note()
+        n.addLyric("å" * 120)
+        doc.root.insert(0, n)
+    result = api.query(did, type_name="Note", select=["lyrics.text"], max_bytes=1024)
+    assert result["next_offset"] is not None
+    huge = note.Note("C#8")
+    huge.addLyric("å" * 2000)
+    doc.root.insert(0, huge)
+    with pytest.raises(APIError, match="result_too_large"):
+        api.query(
+            did,
+            type_name="Note",
+            filters={"nameWithOctave": "C#8"},
+            select=["lyrics.text"],
+            max_bytes=1024,
+        )
+
+
+def test_projection_collection_and_expansion_bounds():
+    from music21_mcp.projection import project, selection
+
+    registry = ObjectRegistry()
+    n = note.Note()
+    for i in range(101):
+        n.addLyric(str(i))
+    projected = project(n, selection(["lyrics.text"]), registry)
+    assert len(projected["lyrics"]["items"]) == 100
+    assert projected["lyrics"]["total"] == 101
+    assert projected["lyrics"]["truncated"]
+    leaves = [note.Note() for _ in range(70)]
+    spans = [spanner.Slur(*leaves) for _ in range(70)]
+    outer = spanner.Slur(*spans)
+    with pytest.raises(APIError, match="projection_limit"):
+        project(outer, selection(["spannedElements.spannedElements.pitch.midi"]), registry)

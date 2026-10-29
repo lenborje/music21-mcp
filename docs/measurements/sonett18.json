@@ -1,0 +1,73 @@
+{
+  "input_name": "Sonett18.xml",
+  "input_sha256": "a00ed955f7dd17c84b57f7afa5b42399e7d4859486dd47889343d5808472e23a",
+  "transport": "MCP stdio via official Python SDK; no direct music21 calls in client",
+  "select": [
+    "partName",
+    "partAbbreviation",
+    "title",
+    "composer",
+    "movementName",
+    "number",
+    "numberSuffix",
+    "ratioString",
+    "sharps",
+    "text",
+    "content",
+    "quarterLength",
+    "nameWithOctave",
+    "pitch.nameWithOctave",
+    "pitch.midi",
+    "pitches.nameWithOctave",
+    "pitches.midi",
+    "lyrics.text",
+    "lyrics.syllabic",
+    "lyrics.number",
+    "tie.type",
+    "duration.type",
+    "duration.dots"
+  ],
+  "limit": 100,
+  "max_bytes": 262144,
+  "measurement": {
+    "tool_calls": {
+      "document_open": 1,
+      "object_query": 11,
+      "document_close": 1
+    },
+    "total_tool_calls": 13,
+    "query_page_bytes": [
+      37706,
+      52000,
+      48128,
+      50435,
+      53801,
+      43089,
+      50558,
+      47646,
+      46592,
+      49660,
+      11957
+    ],
+    "occurrences": 1025,
+    "elapsed_seconds": 0.393
+  },
+  "previous_successful_run_tool_calls": 2106,
+  "reduction_percent": 99.3827,
+  "comparison": {
+    "events_equal": 676,
+    "parts": 4,
+    "measures": 120,
+    "compared_fields": [
+      "type",
+      "pitch",
+      "chord pitches",
+      "quarterLength",
+      "direct parent measure number",
+      "offset",
+      "lyrics.text",
+      "lyrics.number",
+      "lyrics.syllabic"
+    ]
+  }
+}

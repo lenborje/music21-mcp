@@ -52,3 +52,21 @@ uv run mypy src
 Tester täcker Python-API:et och en riktig MCP-klient som startar servern över stdio.
 Läs [designbesluten](docs/architecture.md), [API-kontraktet](docs/protocol.md)
 och [roadmapen](docs/roadmap.md).
+
+
+För att hämta värden utan ett object_get per not kan object_query ges exempelvis
+`select=["quarterLength", "pitch.nameWithOctave", "pitches.midi", "lyrics.text"]`.
+Nästlade referenser behåller sina ID:n. Följ alltid next_offset eftersom även
+sidans bytegräns kan begränsa antalet träffar. Se [API-kontraktet](docs/protocol.md).
+
+Ett generellt klientexempel hämtar samtliga objekt med ett valfritt urval genom
+riktiga MCP-anrop och redovisar antalet verktygsanrop:
+
+```sh
+uv run python examples/query_dump.py ~/Downloads/Sonett18.xml \
+  --select partName number quarterLength pitch.nameWithOctave pitches.midi lyrics.text
+```
+
+[Mätningen för Sonett 18](docs/sonett18-measurement.md) jämför den nya hämtningen
+med de tidigare individuella anropen. Starta om en redan körande MCP-server
+för att få det nya verktygsschemat.
