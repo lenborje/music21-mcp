@@ -351,6 +351,9 @@ Verifiera att en agent kan läsa in ett partitur och navigera genom dess struktu
 
 ### Fas 2 – Generell introspektion
 
+**Status:** Implementerad, med fortsatt skrivskydd. Se
+[introspektionsdesignen](introspection.md) och [API-kontraktet](protocol.md).
+
 **Mål:** Göra objektmodellen självbeskrivande.
 
 Implementera:

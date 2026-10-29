@@ -1,4 +1,4 @@
-# Fas 1: API-kontrakt
+# API-kontrakt – fas 1 och 2
 
 Transport: MCP över stdio, en sessionshanterare per serverprocess. Alla
 verktyg returnerar strukturerad JSON. Dokument- och objekt-ID:n är opaka
@@ -10,6 +10,7 @@ strängar. Ett object_id gäller endast i sitt dokument och under dess livstid.
 | document_list | inga | lista av dokumentbeskrivningar |
 | document_close | document_id | closed: true |
 | object_get | document_id, object_id | id, type, properties, positions |
+| object_schema | document_id=null, object_id=null, type_name=null, kind=null, offset=0, limit=50, max_bytes=262144 | typkatalog eller typbeskrivning med items, total, next_offset |
 | object_children | document_id, object_id, offset=0, limit=50 | items, total, next_offset |
 | object_query | document_id, object_id=null, type_name=null, filters=null, offset=0, limit=50, select=null, max_bytes=262144 | items, total, next_offset |
 
@@ -51,7 +52,7 @@ registrering men inte tiden att söka. Traversal över 100 000 förekomster elle
 
 Fel returneras som MCP tool errors med `kod: meddelande`. Koder omfattar
 unknown_document, unknown_object, invalid_file, parse_error, invalid_type,
-invalid_filter, invalid_pagination, invalid_selection, projection_limit,
+invalid_filter, invalid_pagination, invalid_selection, invalid_schema, projection_limit,
 result_too_large, traversal_limit, unsupported_value och
 internal_error. Felaktiga MCP-argument valideras även av SDK:t.
 
@@ -164,3 +165,122 @@ som objektegenskaper. Nästlade Pitch-, Lyric- och ackordnotreferenser får inge
 påhittad Stream-position. Traversal använder Stream.elements och elementOffset,
 inte vanlig iteration eller objektets kontextberoende offset-property, så en
 läsning byter inte activeSite. Rationella tidsvärden behålls på samtliga nivåer.
+
+
+## object_schema: upptäckt utan exekvering
+
+Tre anropsformer stöds:
+
+```text
+object_schema()
+object_schema(type_name="Note")
+object_schema(document_id="doc-...", object_id="obj-...")
+```
+
+Utan mål returneras en paginerad typkatalog med `name` (kortnamn) och `type`
+(fullständigt Python-namn). type_name accepterar båda namnen från katalogen.
+Ingen modul eller klass importeras från en klientsträng. Använd objektformen
+för konkreta underklasser, exempelvis en importerad TrebleClef eller Fermata.
+Katalogen är inte en lista över samtliga klasser i music21. Sökning följer
+fortfarande bara Stream-innehåll; Pitch och andra värdeobjekt nås via referenser.
+
+Objektformen kräver document_id och object_id tillsammans. Den går inte att
+kombinera med type_name. Dokumentstängning ogiltigförklarar även schemaåtkomst
+via dessa referenser. Typkatalogen och klasscheman kräver inget dokument.
+
+Typ-/objektscheman har följande toppnivå:
+
+```json
+{
+  "type": "music21.note.Note",
+  "doc": {"text": "...", "truncated": true},
+  "bases": ["music21.note.NotRest", "music21.note.GeneralNote", "..."],
+  "read_only": true,
+  "items": [],
+  "total": 75,
+  "next_offset": 50
+}
+```
+
+`total` och exemplens medlemsantal beror på installerad music21-version samt
+om ett klass- eller instansschema begärts. Medlemmar sorteras alfabetiskt.
+`kind` kan begränsa resultatet till `property`, `attribute` eller `method`.
+Typkatalogen accepterar inte kind. Egenskaper kan vara både properties och
+attribut; använd `readable` för att hitta hela läsytan.
+
+Varje medlem har:
+
+- `name`, `kind`, `defined_on` (deklarerande klass, eller schemats klass
+  för ett adapterfält som saknar statisk deklaration) och `source`.
+- `doc: {text, truncated}` från property/metod-docstrings eller music21:s
+  _DOC_ATTR. Tom text betyder att dokumentation saknas.
+- `readable`, `writable`, `callable`, samt `restriction` vid nekad åtkomst.
+  writable och callable är alltid false. En upptäckt metod kan alltså inte
+  anropas och en upptäckt offset-property blir inte läsbar automatiskt.
+- För data: `type_hint`, `type_hint_truncated`, `stored_type` och `wire_format`.
+  quarterLength har wire_format=rational; övriga följer värde-/referensreglerna.
+  stored_type är den lagrade Python-typen för publika instansattribut och
+  behöver inte vara samma sak som en deklarerad annotation eller JSON-typen.
+  Värdet returneras inte av schemahämtningen.
+- För metoder: `signature`, `signature_truncated`, `parameters`,
+  `parameters_truncated`, `return_type` och vid känd signatur
+  `return_type_truncated`. self/cls utelämnas när de binds av ett vanligt
+  metod-/klassmetodanrop. Varje parameter har name, kind, type_hint,
+  type_hint_truncated och required. Variadiska parametrar är inte required.
+  Ett defaultargument har `default: {value: ...}` för skalära litteraler;
+  andra standardvärden beskrivs bara som `{type: ...}`. Långa strängdefaults
+  får `{type: "str", truncated: true}`.
+
+`source` är property, class, slot, annotation, music21_docs, instance eller
+adapter. adapter markerar ett granskat fält som inte kunnat upptäckas statiskt,
+exempelvis spannedElements som beräknas av adaptern.
+
+Typannotationer är information från biblioteket, inte exekverbara uttryck eller
+fullständiga JSON Schema-definitioner. Symboliska alias/forward references
+behålls som text. Okänd typ är null. Klassen behöver inte konstrueras och
+properties/metoder körs inte. Instansscheman kan hitta fler fält än klasscheman.
+Både signalerade och faktiskt lagrade typer kan vara versionsberoende.
+
+Scheman följer samma offset/limit/max_bytes-regler som object_query. Gränserna
+är 100 medlemmar per sida och 262144 kompakta UTF-8-JSON-byte. Klassdocstrings
+upprepas per sida; för liten bytebudget för huvudet/en medlem ger
+result_too_large. Docstrings begränsas till 1200 tecken, typtexter till 256,
+signaturer till 2048 och parameterlistor till 32, med trunkeringsmarkörer.
+Högst 16 basklasser listas. Schemasvar innehåller inga nya objektreferenser,
+registrerar inga värdeobjekt och ändrar inte activeSite.
+
+## Generell värdeserialisering
+
+Referensgränsen är music21.prebase.ProtoM21Object. Samma register används av
+object_get, projektion och nästlade värden. Det möjliggör referenser även till
+Accidental, Microtone, Tuplet, Articulation och Expression, utöver befintliga
+Stream-element, Pitch, Duration, Lyric och Tie. En ny refererbar klass får
+inte automatiskt en läsyta: tillåtna fält definieras fortfarande i adaptern.
+
+Utökad granskad läsyta omfattar bland annat Note.articulations/expressions,
+Pitch.accidental/microtone, Duration.tuplets/components samt motsvarande
+värdeobjekts musikaliska egenskaper. Befintliga fält och referenser behålls.
+Läsning kan fylla music21:s cacheminnen, exempelvis skapa en lagrad Microtone
+för en Pitch; schemahämtning gör inte denna läsning.
+
+- Null, bool, str, int och ändliga floats kodas direkt.
+- Fraction och musikaliska quarterLength kodas rationellt, utan avrundning.
+- Enum kodas via sitt value, även IntEnum/StrEnum.
+- Listor/tupler behåller items/total/truncated och högst 100 poster.
+- Strängnycklade dict-värden blir `{entries: {...}, total, truncated}` med högst
+  100 poster. Andra nyckeltyper stöds inte.
+- DurationTuple är ett oföränderligt värde och kodas direkt som
+  `{type, dots, quarterLength}` med rationell quarterLength, inte som $ref.
+  Projektion stöder exempelvis `duration.components.quarterLength` och
+  `duration.tuplets.durationActual.quarterLength` utan att skapa nya ID:n
+  för dessa tuple-värden.
+- Högst fyra containernivåer serialiseras. Cykler i listor/mappningar bryts
+  genom ett kontrollerat unsupported_value-fel. Musikobjekts cykler blir
+  referenser som vanligt; projektionens egna djup-/expansionsgränser gäller.
+- Okända Python-objekt, NaN och oändlighet ger unsupported_value, aldrig repr
+  eller automatisk publicering av privata objekt.
+
+DurationTuple kodades tidigare av den generella tupelregeln, men fältet
+components/durationActual exponeras först i fas 2; formatet ändrar inga
+befintliga lästa Duration-egenskaper. Serialiseringens bytestorleksgräns
+ligger på query-/schema-sidor, inte som en ny global gräns för object_get.

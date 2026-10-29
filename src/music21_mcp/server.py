@@ -63,6 +63,31 @@ def create_server() -> FastMCP:
 
     @mcp.tool(annotations=read)
     @safe
+    def object_schema(
+        document_id: str | None = None,
+        object_id: str | None = None,
+        type_name: str | None = None,
+        kind: str | None = None,
+        offset: int = 0,
+        limit: int = 50,
+        max_bytes: int = 262_144,
+    ) -> dict[str, Any]:
+        """Discover types, properties, annotations, docs and method signatures without execution.
+
+        No target lists the supported type catalog. Use type_name (short or full name)
+        for a type schema, or document_id + object_id for an instance schema.
+        Schema items include name, kind, defined_on, readable/writable/callable and doc.
+        kind optionally filters property, attribute or method. Discovered metadata does
+        not grant access: only readable fields work in object_get and query projections.
+        Every method has callable=false; writes and method calls remain unavailable.
+        Getters are never executed by schema discovery. Unknown type hints are null;
+        string annotations are not evaluated. Docs/parameters may be explicitly truncated.
+        limit is 1..100, max_bytes 1024..262144 compact UTF-8 JSON bytes; use next_offset.
+        """
+        return objects.schema(document_id, object_id, type_name, kind, offset, limit, max_bytes)
+
+    @mcp.tool(annotations=read)
+    @safe
     def object_children(
         document_id: str, object_id: str, offset: int = 0, limit: int = 50
     ) -> dict[str, Any]:
@@ -90,6 +115,7 @@ def create_server() -> FastMCP:
         Type names: Music21Object, Stream, Score, Part, Measure, Voice, GeneralNote,
         NotRest, Note, Rest, Chord, TimeSignature, KeySignature, Clef, Instrument,
         Metadata, TextExpression, MetronomeMark, Spanner. Subclasses match too.
+        Use object_schema() for the full type catalog and readable properties.
         Filters are AND equality on nameWithOctave, quarterLength, number, partName,
         text, step, octave, type, ratioString, sharps, content. Missing fields do not
         match. quarterLength accepts a number or {numerator, denominator}.

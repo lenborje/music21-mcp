@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from music21 import duration
+
 from .adapters.music21 import FIELDS, properties
 from .registry import APIError, ObjectRegistry
 from .serialization import encode, rational
@@ -40,6 +42,8 @@ def project(obj: object, tree: dict[str, Any], registry: ObjectRegistry) -> dict
             return rational(value) if name == "quarterLength" else encode(value, registry)
         if value is None:
             return None
+        if isinstance(value, duration.DurationTuple):
+            return read(value, branch)
         if isinstance(value, (list, tuple)):
             return {
                 "items": [expand(v, branch, name) for v in value[:100]],

@@ -1,8 +1,9 @@
 # music21-mcp
 
 Skrivskyddad MCP-server över stdio för att läsa MusicXML och utforska music21:s
-objektmodell med stabila objektreferenser. Fas 1 är implementerad; redigering,
-export, metodanrop och automatisk introspektion ingår inte.
+objektmodell med stabila objektreferenser. Fas 1 och 2 är implementerade, inklusive
+självbeskrivande scheman och nästlad projektion. Redigering, export och metodanrop
+ingår inte.
 
 Kräver Python 3.12 eller senare och [uv](https://docs.astral.sh/uv/).
 
@@ -70,3 +71,18 @@ uv run python examples/query_dump.py ~/Downloads/Sonett18.xml \
 [Mätningen för Sonett 18](docs/sonett18-measurement.md) jämför den nya hämtningen
 med de tidigare individuella anropen. Starta om en redan körande MCP-server
 för att få det nya verktygsschemat.
+
+
+Utforska läsmodellen utan att känna till music21:s interna API:
+
+1. `object_schema()` listar typerna som kan beskrivas utan ett öppet dokument.
+2. `object_schema(type_name="Note")` beskriver ärvda egenskaper och metoder.
+3. `object_schema(document_id=..., object_id=...)` beskriver ett verkligt objekt,
+   inklusive publika instansfält som saknar statiska deklarationer.
+4. Välj fält märkta `readable: true` i object_query.select eller läs dem via
+   object_get. Följ next_offset för hela schemat.
+
+Metoder redovisas med signaturer och dokumentation men `callable: false`.
+Upptäckt av ett publikt fält ger inte läsbehörighet automatiskt. Schemahämtning
+kör inte getters och utvärderar inte annotationer. Läs [undersökningen av
+introspektion](docs/introspection.md) för designval och täckning.

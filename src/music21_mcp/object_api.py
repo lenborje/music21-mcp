@@ -1,27 +1,18 @@
 """Read-only navigation independent of MCP transport."""
 
-import json
 from fractions import Fraction
 from typing import Any
 
 from music21 import stream
 
 from .adapters.music21 import TYPES, properties, walk
+from .introspection import qualified
+from .introspection import schema as describe_schema
+from .pagination import json_size, page, validate_bytes
 from .projection import project, selection
 from .registry import APIError
 from .serialization import encode, rational
 from .sessions import Document, SessionManager
-
-
-def page(items: list[Any], offset: int, limit: int) -> dict[str, Any]:
-    if type(offset) is not int or type(limit) is not int or offset < 0 or not 1 <= limit <= 100:
-        raise APIError("invalid_pagination: offset >= 0 and 1 <= limit <= 100 required")
-    end = offset + limit
-    return {
-        "items": items[offset:end],
-        "total": len(items),
-        "next_offset": end if end < len(items) else None,
-    }
 
 
 def numeric(value: Any) -> Fraction:
@@ -75,6 +66,43 @@ class ObjectAPI:
             },
         }
 
+    def schema(
+        self,
+        document_id: str | None = None,
+        object_id: str | None = None,
+        type_name: str | None = None,
+        kind: str | None = None,
+        offset: int = 0,
+        limit: int = 50,
+        max_bytes: int = 262_144,
+    ) -> dict[str, Any]:
+        page([], offset, limit)
+        validate_bytes(max_bytes)
+        if object_id is not None:
+            if document_id is None or type_name is not None:
+                raise APIError("invalid_schema: object_id requires document_id and no type_name")
+            obj = self.sessions.get(document_id).registry.get(object_id)
+            return describe_schema(type(obj), obj, kind, offset, limit, max_bytes)
+        if document_id is not None:
+            raise APIError("invalid_schema: document_id requires object_id")
+        if type_name is not None:
+            cls = TYPES.get(type_name)
+            if cls is None:
+                cls = next((c for c in TYPES.values() if qualified(c) == type_name), None)
+            if cls is None:
+                raise APIError("invalid_type: Unsupported schema type name")
+            return describe_schema(cls, None, kind, offset, limit, max_bytes)
+        if kind is not None:
+            raise APIError("invalid_schema: kind requires a type or object target")
+        entries = [{"name": name, "type": qualified(cls)} for name, cls in sorted(TYPES.items())]
+        result = page(entries, offset, limit)
+        while json_size(result) > max_bytes and result["items"]:
+            result["items"].pop()
+            result["next_offset"] = offset + len(result["items"])
+        if not result["items"] and offset < len(entries):
+            raise APIError("result_too_large: Type catalog entry exceeds max_bytes")
+        return result
+
     def children(
         self, document_id: str, object_id: str, offset: int = 0, limit: int = 50
     ) -> dict[str, Any]:
@@ -107,8 +135,7 @@ class ObjectAPI:
     ) -> dict[str, Any]:
         page([], offset, limit)
         tree = selection(select)
-        if type(max_bytes) is not int or not 1024 <= max_bytes <= 262_144:
-            raise APIError("invalid_pagination: max_bytes must be between 1024 and 262144")
+        validate_bytes(max_bytes)
         doc = self.sessions.get(document_id)
         root = doc.root if object_id is None else doc.registry.get(object_id)
         if type_name is not None and type_name not in TYPES:
@@ -157,7 +184,7 @@ class ObjectAPI:
                 item = self.edge(doc, parent, child, position)
                 if tree is not None:
                     item["properties"] = project(child, tree, doc.registry)
-                size = len(json.dumps(item, ensure_ascii=False, separators=(",", ":")).encode()) + 1
+                size = json_size(item) + 1
                 if used_bytes + size > max_bytes:
                     if not matches:
                         raise APIError(

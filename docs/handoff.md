@@ -2,15 +2,16 @@
 
 ## Status och avgränsning
 
-Fas 1 i [roadmapen](roadmap.md) är implementerad: en fungerande, tillståndsbevarande,
-skrivskyddad MCP-server över stdio. Därefter har object_query fått generellt
-urval av nästlade egenskaper för att minska antalet anrop vid inspektion.
-Användaren har startat om sin anslutna MCP-server och den nya funktionen har
-verifierats genom just den anslutningen.
+Fas 1 och 2 i [roadmapen](roadmap.md) är implementerade: en tillståndsbevarande,
+skrivskyddad MCP-server över stdio med generellt urval av nästlade egenskaper,
+object_schema, automatisk metadataupptäckt och generell värdeserialisering.
+Projektionen verifierades efter användarens tidigare omstart. Fas 2:s nya
+schema har verifierats genom en separat riktig stdio-klient i integrationstest;
+användarens redan körande MCP-server behöver startas om för det nya schemat.
 
 **Ingen redigering ska implementeras utan ett nytt uppdrag.** Inga setters,
 objektskapande verktyg, metodanrop, export eller transaktioner finns.
-Fas 2 med automatisk introspektion/object_schema är inte implementerad.
+Fas 2 är klar; fas 3 ska inte påbörjas utan ett nytt uppdrag.
 Det finns inget pågående implementationsuppdrag efter denna handoff.
 
 Tidigare implementationer är committade och pushade till origin/main:
@@ -18,7 +19,9 @@ Tidigare implementationer är committade och pushade till origin/main:
 - `06ce4a0`: skrivskyddad fas 1 och ursprungliga designbeslut.
 - `e95f2a7`: begränsad nästlad projektion, tester och Sonett 18-mätning.
 
-Denna handoff ska också committas och pushas enligt användarens uppdrag.
+- `0550e9b`: handoff för läget före fas 2.
+
+Denna handoff har därefter uppdaterats med fas 2:s design och verifiering.
 
 ## Läs först
 
@@ -37,10 +40,12 @@ Denna handoff ska också committas och pushas enligt användarens uppdrag.
 | adapters/music21.py | Explicit tillåtna typer/egenskaper och Stream-traversal |
 | serialization.py | JSON-värden, rationella tider och objektreferenser |
 | projection.py | Validering och begränsad expansion av valda egenskaper |
+| introspection.py | Passiv metadataupptäckt, docs, typer, signaturer och scheman |
+| pagination.py | Gemensamma paginerings- och JSON-storleksregler |
 | object_api.py | Läsning, barn, sökning och paginering utan MCP-beroende |
 
 Exponerade verktyg: document_open, document_list, document_close,
-object_get, object_children och object_query. Python >=3.12,
+object_get, object_children, object_query och object_schema. Python >=3.12,
 music21 >=10.5,<11 och officiella MCP-SDK:t >=1.26,<2; uv.lock finns.
 Undersökningen utfördes med music21 10.5.2 och MCP 1.30.0.
 
@@ -105,7 +110,9 @@ uv run ruff format --check src tests examples/query_dump.py
 uv run mypy src
 ```
 
-14 tester passerade; Ruff, formatering och mypy passerade. Integrationstester
+Efter fas 2 passerade 28 tester på både Python 3.12 och 3.14, inklusive riktig
+stdio-transport. Ruff, formatering och mypy passerade också. Tester för schema,
+generell serialisering och metadataupptäckt beskrivs i introspection.md. Integrationstester
 startar en riktig server med officiella SDK:ts stdio-klient och jämför
 projektioner med individuella object_get, inklusive noter, ackord, pauser,
 text, duration, tie, spanners och bytebegränsad paginering. Direkta API-tester
@@ -152,8 +159,28 @@ transportreparation har implementerats i projektet.
 
 ## Nästa steg vid ett nytt uppdrag
 
-Följ användarens nästa prioritering. Roadmapens fas 2 är en möjlig fortsättning,
-men object_schema/automatisk introspektion är ännu inte beställt. Separat
+Följ användarens nästa prioritering. Fas 2 är implementerad. Läs
+[introspection.md](introspection.md) för designval, uppmätt täckning och gränser.
+Fas 3 omfattar redigering och är inte beställd. Separat
 paginering av egenskapssamlingar och vidare diagnostik av värdavbrottet är
 kända förbättringsområden, inte pågående arbete. Behåll generellt API och
 skrivskydd tills användaren uttryckligen ändrar avgränsningen.
+
+
+## Fas 2: nytt API och fortsatta säkerhetsgränser
+
+object_schema() listar den paginerade typkatalogen. type_name="Note" ger
+klassmetadata; document_id + object_id ger instansmetadata även för konkreta
+underklasser. kind kan filtrera property/attribute/method. Bara katalogtyper
+kan väljas med namn; inga godtyckliga importer görs.
+
+Schema upptäcker namn utan getters och utvärderar inte annotationer, inte heller
+uppskjutna annotationer i Python 3.14+. Upptäckta namn ger inte läsbehörighet.
+readable anger den granskade policyn; writable/callable är alltid false.
+Objektregister och activeSite lämnas orörda av schemahämtning. Null-typer och
+trunkerade docstrings är avsiktligt markerade, inte implicita behörigheter.
+
+Serialisering använder ProtoM21Object som referensbas. Accidental, Microtone,
+Tuplet, Articulation och Expression har granskade läsfält; DurationTuple kodas
+som ett direkt värde. Mappningar och enumvärden stöds med storleks-/djupgränser.
+Detta är fortsatt ett skrivskyddat API utan metodexekvering.

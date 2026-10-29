@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from music21 import (
+    articulations,
     base,
     chord,
     clef,
@@ -31,13 +32,36 @@ FIELDS: dict[type, tuple[str, ...]] = {
     stream.Part: ("partName", "partAbbreviation"),
     stream.Measure: ("number", "numberSuffix"),
     stream.Voice: (),
-    note.GeneralNote: ("duration", "quarterLength", "lyrics"),
+    note.GeneralNote: ("duration", "quarterLength", "lyrics", "expressions", "articulations"),
     note.NotRest: ("tie",),
     note.Note: ("pitch", "nameWithOctave"),
     note.Rest: ("fullMeasure",),
     chord.Chord: ("pitches", "notes"),
-    pitch.Pitch: ("name", "nameWithOctave", "step", "octave", "alter", "midi"),
-    duration.Duration: ("quarterLength", "type", "dots"),
+    pitch.Pitch: (
+        "name",
+        "nameWithOctave",
+        "step",
+        "octave",
+        "alter",
+        "midi",
+        "accidental",
+        "microtone",
+    ),
+    duration.Duration: ("quarterLength", "type", "dots", "tuplets", "components"),
+    duration.DurationTuple: ("type", "dots", "quarterLength"),
+    duration.Tuplet: (
+        "numberNotesActual",
+        "numberNotesNormal",
+        "durationActual",
+        "durationNormal",
+        "type",
+        "bracket",
+        "placement",
+    ),
+    pitch.Accidental: ("name", "alter", "displayStatus", "displayType"),
+    pitch.Microtone: ("cents", "harmonicShift", "alter"),
+    articulations.Articulation: ("name", "placement"),
+    expressions.Expression: ("name",),
     note.Lyric: ("text", "number", "syllabic", "identifier"),
     tie.Tie: ("type", "style", "placement"),
     meter.TimeSignature: ("ratioString",),
@@ -52,12 +76,18 @@ FIELDS: dict[type, tuple[str, ...]] = {
 TYPES = {cls.__name__: cls for cls in FIELDS}
 
 
-def fields(obj: object) -> tuple[str, ...]:
-    return tuple(
+def readable_names(cls: type) -> tuple[str, ...]:
+    """The reviewed capability policy, independent of metadata discovery."""
+    names = tuple(
         dict.fromkeys(
-            field for cls, names in FIELDS.items() if isinstance(obj, cls) for field in names
+            field for owner, names in FIELDS.items() if issubclass(cls, owner) for field in names
         )
     )
+    return names + (("spannedElements",) if issubclass(cls, spanner.Spanner) else ())
+
+
+def fields(obj: object) -> tuple[str, ...]:
+    return tuple(n for n in readable_names(type(obj)) if n != "spannedElements")
 
 
 def properties(obj: object) -> dict[str, Any]:

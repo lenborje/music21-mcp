@@ -67,7 +67,7 @@ Primärkällor:
 
 ## Uppskjutna beslut
 
-Automatisk schema/introspektion hör till fas 2. Resultat från framtida
+Automatisk schema/introspektion infördes i fas 2; se introspection.md. Resultat från framtida
 metodanrop får inte automatiskt bli nya dokument utan ett separat beslut.
 Transaktioner kan behöva kopior och en strategi för ogiltiga referenser;
 rollback och redigering implementeras inte nu. MusicXML-bevarande behöver
@@ -92,3 +92,18 @@ Alternativet att alltid expandera allt avvisades: det skulle försvåra både
 storlekskontroll och cykelhantering. Urvalet behåller i stället samma
 objektidentitet som individuella object_get-anrop. Integrationstester följer
 referenser oberoende via object_get och jämför både skalärer och samlingar.
+
+
+## Fas 2: metadata och läspolicy
+
+object_schema beskriver en typ eller faktisk instans utan att anropa getters.
+Passiv introspektion kombinerar MRO, properties, klassannotationer, slots,
+_DOC_ATTR och publika instansfält. Automatisk upptäckt ändrar aldrig läs- eller
+anropsbehörigheter. Metodsignaturer och docs är metadata; object_call saknas.
+
+ProtoM21Object är gemensam referensbas för musikaliska objekt även utanför
+Stream-hierarkin. Generella serialiseringsregler och några ytterligare granskade
+värdefält gör exempelvis Tuplet och Accidental läsbara. DurationTuple förblir
+ett oföränderligt värde. Typinformation evalueras inte, inte heller på Python
+3.14+ med uppskjutna annotationer. Se introspection.md för mätt täckning,
+begränsningar och säkerhetsbeslut.

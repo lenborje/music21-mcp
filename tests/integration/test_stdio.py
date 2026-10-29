@@ -20,6 +20,7 @@ async def test_real_stdio_client():
                 "object_get",
                 "object_children",
                 "object_query",
+                "object_schema",
             }
 
             async def call(name, **kwargs):
