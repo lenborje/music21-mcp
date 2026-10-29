@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "music21-mcp"
+version = "0.1.0"
+description = "Read-only, stateful music21 MCP server"
+requires-python = ">=3.12"
+dependencies = ["music21>=10.5,<11", "mcp>=1.26,<2"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=1", "ruff", "mypy"]
+
+[project.scripts]
+music21-mcp = "music21_mcp.server:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.mypy]
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

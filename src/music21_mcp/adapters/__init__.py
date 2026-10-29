@@ -1,0 +1,1 @@
+"""Library-specific adapters."""
