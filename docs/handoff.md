@@ -5,9 +5,10 @@
 Fas 1 och 2 i [roadmapen](roadmap.md) är implementerade: en tillståndsbevarande,
 skrivskyddad MCP-server över stdio med generellt urval av nästlade egenskaper,
 object_schema, automatisk metadataupptäckt och generell värdeserialisering.
-Projektionen verifierades efter användarens tidigare omstart. Fas 2:s nya
-schema har verifierats genom en separat riktig stdio-klient i integrationstest;
-användarens redan körande MCP-server behöver startas om för det nya schemat.
+Användaren har startat om MCP-servern även efter fas 2. object_schema,
+schemastyrd läsning, nästlade värden, objektidentitet och schemapaginering
+har verifierats genom den ordinarie anslutningen. Ingen ytterligare omstart
+behövs för den nuvarande versionen.
 
 **Ingen redigering ska implementeras utan ett nytt uppdrag.** Inga setters,
 objektskapande verktyg, metodanrop, export eller transaktioner finns.
@@ -18,8 +19,8 @@ Tidigare implementationer är committade och pushade till origin/main:
 
 - `06ce4a0`: skrivskyddad fas 1 och ursprungliga designbeslut.
 - `e95f2a7`: begränsad nästlad projektion, tester och Sonett 18-mätning.
-
 - `0550e9b`: handoff för läget före fas 2.
+- `16b9104`: implementerad och verifierad fas 2, med tester och dokumentation.
 
 Denna handoff har därefter uppdaterats med fas 2:s design och verifiering.
 
@@ -28,6 +29,7 @@ Denna handoff har därefter uppdaterats med fas 2:s design och verifiering.
 - [README](../README.md): installation och start.
 - [Arkitektur](architecture.md): music21-undersökning och designbeslut.
 - [API-kontrakt](protocol.md): exakt semantik, gränser och offsetkontexter.
+- [Introspektion](introspection.md): fas 2, uppmätt täckning och säkerhetsbeslut.
 - [Mätrapport](sonett18-measurement.md) och [mätdata](measurements/sonett18.json).
 
 ## Kodens ansvar
@@ -108,12 +110,13 @@ uv run pytest -q
 uv run ruff check src tests examples/query_dump.py
 uv run ruff format --check src tests examples/query_dump.py
 uv run mypy src
+uv run --isolated --python 3.14 --extra dev pytest -q
 ```
 
 Efter fas 2 passerade 28 tester på både Python 3.12 och 3.14, inklusive riktig
 stdio-transport. Ruff, formatering och mypy passerade också. Tester för schema,
-generell serialisering och metadataupptäckt beskrivs i introspection.md. Integrationstester
-startar en riktig server med officiella SDK:ts stdio-klient och jämför
+generell serialisering och metadataupptäckt beskrivs i introspection.md.
+Integrationstester startar en riktig server med officiella SDK:ts stdio-klient och jämför
 projektioner med individuella object_get, inklusive noter, ackord, pauser,
 text, duration, tie, spanners och bytebegränsad paginering. Direkta API-tester
 täcker delade objekt, activeSite och expansionsgränser. Testpartituren kräver
@@ -124,6 +127,20 @@ Sonett 18 gav 559 enskilda Note-objekt; nästlad tonhöjd och text matchade
 object_get. Med max_bytes=2048 gav två på varandra följande sidor 4 träffar
 vardera, 1812 respektive 1814 byte och next_offset 4 respektive 8, utan överlapp.
 Testdokumentet stängdes och anslutningen förblev stabil.
+
+Efter omstarten för fas 2 verifierades dessutom följande genom den ordinarie
+MCP-anslutningen, utan direktanrop till music21:
+
+- Typkatalogen gav 29 typer; klasschemat för Note gav 75 medlemmar.
+- De åtta läsfälten från schemat användes som select i object_query och gav
+  samma properties som ett individuellt object_get för första noten.
+- Instansschemat angav lagrad typ music21.pitch.Pitch för pitch-fältet.
+- Nästlade tonhöjder, duration-komponenter och text kunde läsas med samma ID:n.
+- Metoden transpose hade signatur och dokumentation men callable=false.
+- Schemapaginering med max_bytes=8192 gav först 5 medlemmar, next_offset=5,
+  därefter 4 medlemmar utan överlappning.
+- Sonett 18 gav 559 enskilda noter. Testdokumentet stängdes och transporten
+  förblev stabil.
 
 ## Sonett 18 och anropsmätning
 
@@ -184,3 +201,14 @@ Serialisering använder ProtoM21Object som referensbas. Accidental, Microtone,
 Tuplet, Articulation och Expression har granskade läsfält; DurationTuple kodas
 som ett direkt värde. Mappningar och enumvärden stöds med storleks-/djupgränser.
 Detta är fortsatt ett skrivskyddat API utan metodexekvering.
+
+
+### Viktigt om Python 3.14-annotationer
+
+Ett riktat test visade att även annotationlib.Format.STRING kan exekvera
+uppskjutna annotationsuttryck. Återinför inte den vägen för att förenkla koden.
+På Python >=3.14 läses annotationer ur källkodens AST. inspect.signature får
+en oannoterad funktionskopia med samma argumentlayout; kroppen körs aldrig.
+Om källkod saknas blir typinformationen okänd. På Python 3.12 används redan
+lagrade annotationer med eval_str=False. Regressionstestet för uppskjutna
+uttryck måste fortsätta köras på Python 3.14, inte bara 3.12.
